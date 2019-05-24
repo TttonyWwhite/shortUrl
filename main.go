@@ -36,6 +36,7 @@ func WebRoot(context *gin.Context) {
 	context.String(http.StatusOK, "hello, world")
 }
 
+// 将长url转换为短url
 func Shorter(longUrl string) (shortUrl string) {
 	// 先试着从redis缓存查询
 	shortUrl, err := models.GetShortUrlFromRedis(longUrl)
@@ -59,6 +60,7 @@ func Shorter(longUrl string) (shortUrl string) {
 	return shortUrl
 }
 
+// 将短url还原为长url
 func Longer(shortUrl string) (longUrl string) {
 	// 先尝试从redis缓存查询
 	longUrl, err := models.GetLongUrlFromRedis(shortUrl)

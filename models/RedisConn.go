@@ -25,6 +25,7 @@ func init() {
 }
 
 func AddLongToShort(longUrl string, shortUrl string) {
+	// 缓存中数据过期时间暂且定为5分钟
 	Client.Set(longUrl, shortUrl, time.Minute*5)
 }
 
