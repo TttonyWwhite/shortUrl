@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const(
+const (
 	prefix = "localhost:8081/short/" // 因为是在localhost实现，所以前缀还不够短.
 )
 
@@ -37,35 +37,52 @@ func WebRoot(context *gin.Context) {
 }
 
 func Shorter(longUrl string) (shortUrl string) {
-	shortUrl, err :=  models.GetShortUrl(longUrl)
+	// 先试着从redis缓存查询
+	shortUrl, err := models.GetShortUrlFromRedis(longUrl)
 	if err != nil {
-		// 数据库中没有记录，说明是新的长地址，需要计算得到结果
-		id := models.GetCount()
-		str := encode(id)
-		shortUrl = prefix + str
-		models.InsertRecord(shortUrl, longUrl)
+		// redis缓存没有命中
+		shortUrl, err = models.GetShortUrl(longUrl)
+		if err != nil {
+			// 数据库中也没有记录，说明是新的长地址，需要计算得到结果
+			id := models.GetCount()
+			str := encode(id)
+			shortUrl = prefix + str
+			// 将对应关系加入到mysql和redis
+			models.InsertRecord(shortUrl, longUrl)
+			models.AddLongToShort(longUrl, shortUrl)
+		} else {
+			// mysql数据库中有记录，但是redis没有
+			models.AddLongToShort(longUrl, shortUrl)
+		}
 	}
 
 	return shortUrl
-
 }
 
 func Longer(shortUrl string) (longUrl string) {
-	shortPart := strings.Split(shortUrl, "/")[2]
-	id := decode(shortPart)
-	longUrl, err := models.GetLongUrl(id)
-
+	// 先尝试从redis缓存查询
+	longUrl, err := models.GetLongUrlFromRedis(shortUrl)
 	if err != nil {
-		log.Fatalf("Error: %s", err)
-		return
+		// redis缓存没有命中，从mysql查询
+		shortPart := strings.Split(shortUrl, "/")[2]
+		id := decode(shortPart)
+		longUrl, err = models.GetLongUrl(id)
+
+		if err != nil {
+			log.Fatalf("Error: %s", err)
+			return
+		}
+
+		// 将对应关系写入redis
+		models.AddShortToLong(shortUrl, longUrl)
 	}
 
 	return longUrl
 }
 
 /**
-	将一个62进制的数转换回十进制的id
- */
+将一个62进制的数转换回十进制的id
+*/
 func decode(s string) int {
 	dict := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	base := len(dict)
@@ -81,8 +98,8 @@ func decode(s string) int {
 }
 
 /**
-	将一个id转换成一个62进制的数(用string表示)并返回
- */
+将一个id转换成一个62进制的数(用string表示)并返回
+*/
 func encode(i int) string {
 	dict := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	base := len(dict)
