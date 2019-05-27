@@ -1,10 +1,11 @@
 package models
 
-import(
+import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/mysql"
 	"log"
 )
+
 var DB *gorm.DB
 
 func init() {
