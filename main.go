@@ -8,15 +8,19 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 const (
 	prefix = "localhost:8081/short/" // 因为是在localhost实现，所以前缀还不够短.
 )
 
+var m *sync.Mutex
+
 func main() {
 	router := gin.Default()
 	router.Use(cors.Default())
+	m = new(sync.Mutex)
 	router.GET("/long", func(context *gin.Context) {
 		longUrl := context.Query("longUrl")
 		context.String(http.StatusOK, Shorter(longUrl))
@@ -45,12 +49,14 @@ func Shorter(longUrl string) (shortUrl string) {
 		shortUrl, err = models.GetShortUrl(longUrl)
 		if err != nil {
 			// 数据库中也没有记录，说明是新的长地址，需要计算得到结果
+			m.Lock()
 			id := models.GetCount()
 			str := encode(id)
 			shortUrl = prefix + str
 			// 将对应关系加入到mysql和redis
 			models.InsertRecord(shortUrl, longUrl)
 			models.AddLongToShort(longUrl, shortUrl)
+			m.Unlock()
 		} else {
 			// mysql数据库中有记录，但是redis没有
 			models.AddLongToShort(longUrl, shortUrl)
